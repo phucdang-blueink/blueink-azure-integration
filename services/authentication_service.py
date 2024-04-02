@@ -18,20 +18,18 @@ class AuthenticationService:
             "resource": self._options.resource
         }
         request_url = f"{self._options.endpoint}{self._options.tenant_id}/oauth2/token"
-        logging.info(request_url)
-        logging.info(values)
+        # REQUEST_URL = "https://login.microsoftonline.com/b6a8f59c-780a-4979-bc79-74aea389366d/oauth2/token"
 
         try:
             response = requests.post(request_url, data=values)
             response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
         except requests.RequestException as e:
-            print(f"Request to {request_url} failed: {e}")
+            logging.error(f"Request to {request_url} failed: {e}")
             return None
 
         try:
             token_response = response.json()
-            logging.info(token_response)
             return token_response.get('access_token')
         except json.JSONDecodeError:
-            print("Failed to decode JSON response")
+            logging.error("Failed to decode JSON response")
             return None

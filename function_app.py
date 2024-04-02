@@ -1,50 +1,54 @@
 import azure.functions as func
 import logging
+import math
+import json
 from convert_to_pdf import ConvertToPdf
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-@app.route(route="HttpExample")
-def HttpExample(req: func.HttpRequest) -> func.HttpResponse:
-    name = req.params.get('name')
-    if not name:
-        try:
-            req_body = req.get_json()
-        except ValueError:
-            pass
-        else:
-            name = req_body.get('name')
-
-    if name:
-        return func.HttpResponse(f"Hello, {name}. This HTTP triggered function executed successfully. Make some minor changes to see the changes in the function app.")
-    else:
-        return func.HttpResponse(
-             "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response. Make some minor changes to see the changes in the function app.",
-             status_code=200
-        )
+def convert_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return "%s %s" % (s, size_name[i])
 
 @app.route(route="upload", methods=["POST"])
 def upload(req: func.HttpRequest) -> func.HttpResponse:
     if not req.files:
         return func.HttpResponse("No files uploaded", status_code=400)
 
-    file = req.files.get('file')
-    logging.info(file.content_type)
-    convert_to_pdf_service = ConvertToPdf()
-    path = convert_to_pdf_service.build_path()
-    logging.info(file.content_type)
-    file_id = convert_to_pdf_service.file_service.upload_stream(path, file.read(), file.content_type)
-    logging.info(file_id)
+    convert_to_pdf = ConvertToPdf()
+    ressponse = convert_to_pdf.upload(req.files.get('file'))
 
-    return func.HttpResponse(path, status_code=200)
+    custom_response = {
+        "response_from_blueink": {
+            "file_name": req.files.get('file').filename,
+            "file_size": convert_size(ressponse["size"]),
+            "file_id": ressponse["id"],
+        },
+        "response_from_microsoft": ressponse
+    }
 
-@app.route(route="convert_to_pdf", methods=["POST"])
-def convert_to_pdf(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info(req.files)
-    convert_to_pdf_service = ConvertToPdf()
-    path = convert_to_pdf_service.build_path()
-    logging.info(path)
-    # file_id = convert_to_pdf_service.file_service.upload_stream(path, req.get_data(), req.headers.get('Content-Type'))
-    # logging.info(file_id)
+    return func.HttpResponse(
+        json.dumps(custom_response),
+        status_code=200,
+        mimetype='application/json'
+    )
 
-    return func.HttpResponse(path, status_code=200)
+@app.route(route="download", methods=["GET"])
+def download(req: func.HttpRequest) -> func.HttpResponse:
+    file_id = req.params.get('file_id')
+    if not file_id:
+        return func.HttpResponse("No file_id provided", status_code=400)
+
+    convert_to_pdf = ConvertToPdf()
+    ressponse = convert_to_pdf.download(file_id)
+
+    return func.HttpResponse(
+        ressponse,
+        status_code=200,
+        mimetype='application/pdf'
+    )

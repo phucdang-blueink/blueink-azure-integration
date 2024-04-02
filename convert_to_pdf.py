@@ -1,12 +1,11 @@
 import json
+import logging
 
 from models.authentication_options import AuthenticationOptions
 from models.pdf_options import PdfOptions
 
 from services.authentication_service import AuthenticationService
 from services.file_service import FileService
-
-import logging
 
 def transform_config(config, prefix):
     prefix_values = {k: v for k, v in config.items() if k.startswith(prefix)}
@@ -15,7 +14,7 @@ def transform_config(config, prefix):
 
 class ConvertToPdf:
     def __init__(self):
-        with open('local.settings.json', 'r') as f:
+        with open('credentials.json', 'r') as f:
             self.config = json.load(f)["Values"]
 
         graph_values = transform_config(self.config, 'graph:')
@@ -29,6 +28,16 @@ class ConvertToPdf:
         self.authentication_service = AuthenticationService(self.authentication_options)
         self.file_service = FileService(self.authentication_service)
 
-    def build_path(self):
-        return f"{self.pdf_config['graph_endpoint']}sites/{self.pdf_config['site_id']}/drive/items/"
+    def _build_path(self):
+        site_path = f"{self.pdf_config['graph_endpoint']}sites/{self.pdf_config['site_id']}/drive/items/"
+        logging.info(f"Site Path: {site_path}")
+        return site_path
+
+    def upload(self, file):
+        path = self._build_path()
+        return self.file_service.upload_stream(path, file)
+    
+    def download(self, file_id):
+        path = self._build_path()
+        return self.file_service.download_converted_file(path, file_id)
 
